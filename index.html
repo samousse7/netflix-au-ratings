@@ -1,0 +1,414 @@
+<title>Netflix AU Filter</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: a projection-booth listing. Sticky search bar, filter panel (sheet on phone, sidebar on desktop), ranked rows led by a big tabular rating. */
+:root {
+  --bg: #eef0f4;
+  --surface: #ffffff;
+  --ink: #161a24;
+  --muted: #5d6475;
+  --line: #d6dae3;
+  --chip: #e3e7ee;
+  --lamp: #b57800;      /* projector amber: ratings and the accent */
+  --lamp-soft: #f6e7c4;
+  --lamp-ink: #2a1c00;
+  --focus: #2f5fd0;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1219; --surface: #171b25; --ink: #e9ecf2; --muted: #9aa2b4; --line: #2a3040;
+    --chip: #232938; --lamp: #f2b632; --lamp-soft: #3a2e12; --lamp-ink: #1a1200; --focus: #8eb0ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1219; --surface: #171b25; --ink: #e9ecf2; --muted: #9aa2b4; --line: #2a3040;
+  --chip: #232938; --lamp: #f2b632; --lamp-soft: #3a2e12; --lamp-ink: #1a1200; --focus: #8eb0ff;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.45;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap {
+  max-width: 1180px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 48px;
+}
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Header */
+header { padding-block: 22px 6px; }
+h1 {
+  font-family: var(--font-display); font-weight: 800; font-size: clamp(28px, 6vw, 40px);
+  letter-spacing: -0.02em; line-height: 1.05; margin: 0; text-wrap: balance;
+}
+h1 .au { color: var(--lamp); }
+.sub { color: var(--muted); margin: 6px 0 0; font-size: 14px; }
+
+/* Sticky search bar */
+.bar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--bg); padding-block: 12px; display: flex; gap: 8px; align-items: center;
+}
+.search { flex: 1; min-width: 0; position: relative; }
+.search input {
+  width: 100%; padding: 11px 14px; border-radius: var(--r); border: 1px solid var(--line);
+  background: var(--surface);
+}
+.btn {
+  border: 1px solid var(--line); background: var(--surface); border-radius: var(--r);
+  padding: 10px 14px; cursor: pointer; white-space: nowrap; display: inline-flex; gap: 6px; align-items: center;
+}
+.btn:hover { border-color: var(--muted); }
+.btn .count {
+  background: var(--lamp); color: var(--lamp-ink); border-radius: 999px; font-size: 12px; font-weight: 600;
+  min-width: 20px; height: 20px; display: inline-grid; place-items: center; padding: 0 6px;
+}
+#filterToggle[aria-expanded="true"] { border-color: var(--lamp); }
+
+/* Main grid */
+.main { display: grid; gap: 20px; }
+@media (min-width: 900px) {
+  .main { grid-template-columns: 280px minmax(0, 1fr); align-items: start; }
+  #filterToggle { display: none; }
+  #filters[hidden] { display: grid !important; }
+  #done { display: none; }
+  #filters { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 70px); max-height: calc(100vh - 90px); overflow: auto; }
+}
+
+/* Filters */
+#filters {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 16px; display: grid; gap: 18px;
+}
+.f-label {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
+  display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;
+}
+.f-label output { font-family: var(--font-num); color: var(--ink); letter-spacing: 0; font-size: 14px; text-transform: none; }
+input[type="range"] { width: 100%; accent-color: var(--lamp); }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  border: 1px solid transparent; background: var(--chip); border-radius: 999px; padding: 5px 11px;
+  font-size: 13px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--lamp); color: var(--lamp-ink); font-weight: 600; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.field input, .field select, select.full {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink);
+}
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; }
+.toggle input { width: 18px; height: 18px; accent-color: var(--lamp); }
+.f-foot { display: flex; justify-content: space-between; gap: 8px; }
+.link-btn { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: 13px; }
+
+/* Results */
+.summary {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 12px;
+  margin-bottom: 10px; font-size: 14px; color: var(--muted);
+}
+.summary b { color: var(--ink); font-family: var(--font-num); font-weight: 600; }
+.sort { display: flex; align-items: center; gap: 6px; }
+.sort select { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); }
+ol.list { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.movie { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 14px; padding: 14px; border-top: 1px solid var(--line); }
+.movie:first-child { border-top: 0; }
+.score { text-align: center; }
+.score .n { font-family: var(--font-num); font-weight: 600; font-size: 24px; line-height: 1; font-variant-numeric: tabular-nums; }
+.score .meter { height: 4px; border-radius: 2px; background: var(--chip); margin: 7px 4px 5px; overflow: hidden; }
+.score .meter i { display: block; height: 100%; background: var(--lamp); }
+.score .v { font-family: var(--font-num); font-size: 11px; color: var(--muted); }
+.score.top .n { color: var(--lamp); }
+.score.none .n { color: var(--muted); font-size: 16px; padding-top: 4px; }
+.info { min-width: 0; }
+.title { font-family: var(--font-display); font-weight: 600; font-size: 18px; line-height: 1.2; margin: 0; overflow-wrap: anywhere; }
+.orig { color: var(--muted); font-size: 13px; margin-top: 1px; overflow-wrap: anywhere; }
+.meta { color: var(--muted); font-size: 13px; margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.meta .cert { font-family: var(--font-num); font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--ink); }
+.new { background: var(--lamp-soft); color: var(--ink); border-radius: 4px; padding: 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.genres { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.genres span { background: var(--chip); border-radius: 999px; padding: 2px 9px; font-size: 12px; }
+.ov { margin: 8px 0 0; font-size: 14px; color: var(--ink); max-width: 68ch; }
+.ov.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+.links { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; font-size: 13px; }
+.links a { color: var(--ink); text-decoration-color: var(--lamp); text-underline-offset: 3px; text-decoration-thickness: 2px; }
+.more { display: flex; justify-content: center; margin-top: 14px; }
+.state { padding: 40px 20px; text-align: center; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.state strong { display: block; color: var(--ink); font-family: var(--font-display); font-size: 18px; margin-bottom: 4px; }
+footer { margin-top: 28px; font-size: 12px; color: var(--muted); max-width: 70ch; }
+footer a { color: inherit; }
+@media (prefers-reduced-motion: no-preference) {
+  .chip, .btn { transition: background-color .15s, border-color .15s; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Netflix <span class="au">AU</span> Filter</h1>
+    <p class="sub" id="sub">Every movie on Netflix Australia, ranked by IMDb rating.</p>
+  </header>
+
+  <div class="bar">
+    <div class="search">
+      <input id="q" type="search" placeholder="Search titles" autocomplete="off" aria-label="Search titles">
+    </div>
+    <button class="btn" id="filterToggle" aria-expanded="false" aria-controls="filters">Filters <span class="count" id="fcount" hidden>0</span></button>
+  </div>
+
+  <div class="main">
+    <aside id="filters" hidden aria-label="Filters">
+      <div>
+        <div class="f-label"><label for="minRating">Minimum IMDb rating</label><output id="minRatingOut" for="minRating">7.0</output></div>
+        <input id="minRating" type="range" min="0" max="9.5" step="0.1" value="7">
+      </div>
+      <div>
+        <div class="f-label"><span id="votesLabel">Minimum IMDb votes</span></div>
+        <div class="seg" id="votes" role="group" aria-labelledby="votesLabel"></div>
+      </div>
+      <div>
+        <div class="f-label"><span id="genreLabel">Genres</span><button class="link-btn" id="genreClear" type="button">Clear</button></div>
+        <div class="seg" id="genres" role="group" aria-labelledby="genreLabel"></div>
+      </div>
+      <div>
+        <div class="f-label"><span>Release year</span></div>
+        <div class="row2">
+          <label class="field" for="yFrom">From<input id="yFrom" type="number" inputmode="numeric"></label>
+          <label class="field" for="yTo">To<input id="yTo" type="number" inputmode="numeric"></label>
+        </div>
+      </div>
+      <div>
+        <div class="f-label"><span id="rtLabel">Runtime</span></div>
+        <div class="seg" id="runtime" role="group" aria-labelledby="rtLabel"></div>
+      </div>
+      <div>
+        <div class="f-label"><label for="country">Country</label></div>
+        <select id="country" class="full"><option value="">Any country</option></select>
+      </div>
+      <label class="toggle" for="family"><span>Kids-friendly only (G or PG)</span><input id="family" type="checkbox"></label>
+      <label class="toggle" for="newOnly" id="newWrap" hidden><span>Added in the last week</span><input id="newOnly" type="checkbox"></label>
+      <div class="f-foot">
+        <button class="link-btn" id="reset" type="button">Reset filters</button>
+        <button class="btn" id="done" type="button">Show results</button>
+      </div>
+    </aside>
+
+    <section aria-live="polite">
+      <div class="summary">
+        <span id="count">Loading the catalogue…</span>
+        <label class="sort" for="sort">Sort
+          <select id="sort">
+            <option value="rating">IMDb rating</option>
+            <option value="votes">Most voted</option>
+            <option value="year">Newest release</option>
+            <option value="added">Recently added</option>
+            <option value="title">Title A to Z</option>
+          </select>
+        </label>
+      </div>
+      <div id="results"><div class="state"><strong>Loading the catalogue</strong>Fetching this week's Netflix Australia list.</div></div>
+      <div class="more"><button class="btn" id="moreBtn" hidden>Show more</button></div>
+    </section>
+  </div>
+
+  <footer id="foot">
+    Availability and details from <a href="https://www.themoviedb.org" target="_blank" rel="noopener">TMDB</a> (powered by JustWatch). This product uses the TMDB API but is not endorsed or certified by TMDB. Ratings from IMDb's public datasets. Not affiliated with Netflix. Catalogue refreshes every Friday.
+  </footer>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const VOTES = [[0, "Any"], [1000, "1k"], [5000, "5k"], [25000, "25k"], [100000, "100k"]];
+  const RUNTIMES = [[0, "Any"], [90, "Under 90 min"], [120, "Under 2 h"], [150, "Under 2.5 h"]];
+  const FAMILY = new Set(["G", "PG", "US:G", "US:PG", "GB:U", "GB:PG"]);
+  const PAGE = 60;
+  const DEFAULTS = { q: "", minRating: 7, minVotes: 5000, genres: [], yFrom: "", yTo: "", maxRt: 0, country: "", family: false, newOnly: false, sort: "rating" };
+  const STORE_KEY = "nauf-filters-v1";
+
+  let state = { ...DEFAULTS };
+  try { const s = JSON.parse(localStorage.getItem(STORE_KEY) || "null"); if (s) state = { ...DEFAULTS, ...s, q: "" }; } catch (e) {}
+  const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify({ ...state, q: "" })); } catch (e) {} };
+
+  let data = null, filtered = [], shown = 0, newCutoff = "";
+  let regionName = (c) => c;
+  try { const dn = new Intl.DisplayNames(["en-AU"], { type: "region" }); regionName = (c) => { try { return dn.of(c) || c; } catch (e) { return c; } }; } catch (e) {}
+
+  const fmtVotes = (v) => v >= 1e6 ? (v / 1e6).toFixed(1).replace(/\.0$/, "") + "M" : v >= 1e3 ? Math.round(v / 1e3) + "k" : String(v);
+  const fmtRt = (m) => m ? (m >= 60 ? `${Math.floor(m / 60)} h ${m % 60 ? (m % 60) + " min" : ""}`.trim() : `${m} min`) : "";
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function chipGroup(el, items, isOn, onClick) {
+    el.innerHTML = "";
+    for (const [val, label] of items) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = label;
+      b.setAttribute("aria-pressed", isOn(val) ? "true" : "false");
+      b.addEventListener("click", () => { onClick(val); });
+      el.appendChild(b);
+    }
+  }
+
+  function renderControls() {
+    $("minRating").value = state.minRating; $("minRatingOut").textContent = Number(state.minRating).toFixed(1);
+    chipGroup($("votes"), VOTES, (v) => v === state.minVotes, (v) => { state.minVotes = v; update(); });
+    chipGroup($("runtime"), RUNTIMES, (v) => v === state.maxRt, (v) => { state.maxRt = v; update(); });
+    if (data) {
+      const counts = {};
+      for (const m of data.movies) for (const g of m.g) counts[g] = (counts[g] || 0) + 1;
+      const items = Object.keys(data.genres).filter((id) => counts[id]).sort((a, b) => data.genres[a].localeCompare(data.genres[b])).map((id) => [Number(id), data.genres[id]]);
+      chipGroup($("genres"), items, (v) => state.genres.includes(v), (v) => {
+        state.genres = state.genres.includes(v) ? state.genres.filter((x) => x !== v) : [...state.genres, v]; update();
+      });
+    }
+    $("yFrom").value = state.yFrom; $("yTo").value = state.yTo;
+    $("country").value = state.country; $("family").checked = state.family; $("newOnly").checked = state.newOnly;
+    $("sort").value = state.sort;
+    const active = (state.minRating !== DEFAULTS.minRating) + (state.minVotes !== DEFAULTS.minVotes) + (state.genres.length > 0) + (!!state.yFrom || !!state.yTo) + (state.maxRt > 0) + (!!state.country) + state.family + state.newOnly;
+    $("fcount").textContent = active; $("fcount").hidden = active === 0;
+  }
+
+  function apply() {
+    if (!data) return;
+    const q = state.q.trim().toLowerCase();
+    const yF = parseInt(state.yFrom, 10), yT = parseInt(state.yTo, 10);
+    const ratingFilterOn = state.minRating > 0 || state.minVotes > 0;
+    filtered = data.movies.filter((m) => {
+      if (q && !(m.t.toLowerCase().includes(q) || (m.ot && m.ot.toLowerCase().includes(q)))) return false;
+      if (ratingFilterOn) {
+        if (m.r == null) return false;
+        if (m.r < state.minRating - 1e-9) return false;
+        if (m.v < state.minVotes) return false;
+      }
+      if (state.genres.length && !state.genres.some((g) => m.g.includes(g))) return false;
+      if (!isNaN(yF) && (m.y == null || m.y < yF)) return false;
+      if (!isNaN(yT) && (m.y == null || m.y > yT)) return false;
+      if (state.maxRt && (!m.rt || m.rt >= state.maxRt)) return false;
+      if (state.country && !m.c.includes(state.country)) return false;
+      if (state.family && !FAMILY.has(m.cert)) return false;
+      if (state.newOnly && !(m.fs && m.fs >= newCutoff)) return false;
+      return true;
+    });
+    const by = {
+      rating: (a, b) => (b.r ?? -1) - (a.r ?? -1) || b.v - a.v,
+      votes: (a, b) => b.v - a.v,
+      year: (a, b) => (b.y ?? 0) - (a.y ?? 0) || (b.r ?? 0) - (a.r ?? 0),
+      added: (a, b) => (b.fs || "").localeCompare(a.fs || "") || (b.r ?? 0) - (a.r ?? 0),
+      title: (a, b) => a.t.localeCompare(b.t),
+    }[state.sort];
+    filtered.sort(by);
+  }
+
+  function rowHtml(m) {
+    const hasR = m.r != null;
+    const top = hasR && m.r >= 8;
+    const genres = m.g.map((g) => data.genres[g]).filter(Boolean).slice(0, 4);
+    const countries = m.c.map(regionName).join(", ");
+    const isNew = m.fs && m.fs >= newCutoff;
+    const imdb = m.imdb ? `<a href="https://www.imdb.com/title/${esc(m.imdb)}/" target="_blank" rel="noopener">IMDb page</a>` : "";
+    return `<li class="movie">
+      <div class="score ${hasR ? (top ? "top" : "") : "none"}" aria-label="${hasR ? `IMDb ${m.r} from ${m.v} votes` : "No IMDb rating"}">
+        <div class="n">${hasR ? m.r.toFixed(1) : "n/a"}</div>
+        ${hasR ? `<div class="meter"><i style="width:${m.r * 10}%"></i></div><div class="v">${fmtVotes(m.v)}</div>` : ""}
+      </div>
+      <div class="info">
+        <h2 class="title">${esc(m.t)}</h2>
+        ${m.ot ? `<div class="orig">${esc(m.ot)}</div>` : ""}
+        <div class="meta">
+          ${m.y ? `<span>${m.y}</span>` : ""}
+          ${m.rt ? `<span>${fmtRt(m.rt)}</span>` : ""}
+          ${m.cert ? `<span class="cert">${esc(m.cert)}</span>` : ""}
+          ${countries ? `<span>${esc(countries)}</span>` : ""}
+          ${isNew ? `<span class="new">New</span>` : ""}
+        </div>
+        ${genres.length ? `<div class="genres">${genres.map((g) => `<span>${esc(g)}</span>`).join("")}</div>` : ""}
+        ${m.o ? `<p class="ov clamp" title="Tap to expand">${esc(m.o)}</p>` : ""}
+        <div class="links">
+          <a href="https://www.netflix.com/search?q=${encodeURIComponent(m.t)}" target="_blank" rel="noopener">Find on Netflix</a>
+          ${imdb}
+        </div>
+      </div>
+    </li>`;
+  }
+
+  function renderList(reset) {
+    const res = $("results");
+    if (reset) shown = 0;
+    if (!filtered.length) {
+      res.innerHTML = `<div class="state"><strong>No movies match</strong>Try lowering the rating or vote filters, or clearing a genre.</div>`;
+      $("moreBtn").hidden = true;
+    } else {
+      const next = filtered.slice(shown, shown + PAGE);
+      if (reset) res.innerHTML = `<ol class="list" id="list"></ol>`;
+      $("list").insertAdjacentHTML("beforeend", next.map(rowHtml).join(""));
+      shown += next.length;
+      $("moreBtn").hidden = shown >= filtered.length;
+      $("moreBtn").textContent = `Show more (${(filtered.length - shown).toLocaleString("en-AU")} left)`;
+    }
+    $("count").innerHTML = `<b>${filtered.length.toLocaleString("en-AU")}</b> of ${data.count.toLocaleString("en-AU")} movies`;
+  }
+
+  function update() { save(); renderControls(); apply(); renderList(true); }
+
+  // Events
+  let qTimer;
+  $("q").addEventListener("input", (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { state.q = e.target.value; apply(); renderList(true); }, 150); });
+  $("minRating").addEventListener("input", (e) => { state.minRating = Number(e.target.value); $("minRatingOut").textContent = state.minRating.toFixed(1); clearTimeout(qTimer); qTimer = setTimeout(update, 120); });
+  $("yFrom").addEventListener("change", (e) => { state.yFrom = e.target.value; update(); });
+  $("yTo").addEventListener("change", (e) => { state.yTo = e.target.value; update(); });
+  $("country").addEventListener("change", (e) => { state.country = e.target.value; update(); });
+  $("family").addEventListener("change", (e) => { state.family = e.target.checked; update(); });
+  $("newOnly").addEventListener("change", (e) => { state.newOnly = e.target.checked; update(); });
+  $("sort").addEventListener("change", (e) => { state.sort = e.target.value; update(); });
+  $("genreClear").addEventListener("click", () => { state.genres = []; update(); });
+  $("reset").addEventListener("click", () => { state = { ...DEFAULTS, q: state.q }; update(); });
+  $("moreBtn").addEventListener("click", () => renderList(false));
+  const toggleFilters = (open) => { $("filters").hidden = !open; $("filterToggle").setAttribute("aria-expanded", String(open)); };
+  $("filterToggle").addEventListener("click", () => toggleFilters($("filters").hidden));
+  $("done").addEventListener("click", () => { toggleFilters(false); $("results").scrollIntoView({ block: "start", behavior: "smooth" }); });
+  $("results").addEventListener("click", (e) => { const p = e.target.closest(".ov"); if (p) p.classList.toggle("clamp"); });
+
+  renderControls();
+
+  fetch("data/movies.json", { cache: "no-cache" })
+    .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then((d) => {
+      data = d;
+      const up = new Date(d.updated);
+      const cut = new Date(up.getTime() - 8 * 864e5);
+      newCutoff = cut.toISOString().slice(0, 10);
+      const hasNew = d.movies.some((m) => m.fs && m.fs >= newCutoff);
+      $("newWrap").hidden = !hasNew;
+      if (!hasNew) state.newOnly = false;
+      $("sub").textContent = `${d.count.toLocaleString("en-AU")} movies on Netflix Australia, ${d.rated.toLocaleString("en-AU")} with IMDb ratings. Updated ${up.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}.`;
+      const cc = {};
+      for (const m of d.movies) for (const c of m.c) cc[c] = (cc[c] || 0) + 1;
+      const sel = $("country");
+      Object.keys(cc).sort((a, b) => cc[b] - cc[a]).slice(0, 40).sort((a, b) => regionName(a).localeCompare(regionName(b)))
+        .forEach((c) => { const o = document.createElement("option"); o.value = c; o.textContent = `${regionName(c)} (${cc[c]})`; sel.appendChild(o); });
+      const ys = d.movies.map((m) => m.y).filter(Boolean);
+      $("yFrom").placeholder = Math.min(...ys); $("yTo").placeholder = Math.max(...ys);
+      update();
+    })
+    .catch(() => {
+      $("results").innerHTML = `<div class="state"><strong>Couldn't load the movie list</strong>The catalogue file didn't come through. Reload the page, or check back after Friday's refresh.</div>`;
+      $("count").textContent = "No data";
+    });
+})();
+</script>
